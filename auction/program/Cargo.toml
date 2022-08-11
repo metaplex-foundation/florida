@@ -3,7 +3,7 @@ name = "mpl-auction"
 version = "0.0.2"
 description = "Solana Auction Program"
 authors = ["Metaplex Maintainers <maintainers@metaplex.com>"]
-repository = "https://github.com/metaplex-foundation/metaplex"
+repository = "https://github.com/metaplex-foundation/florida"
 license = "AGPL-3.0"
 edition = "2018"
 
