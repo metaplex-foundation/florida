@@ -1,0 +1,9 @@
+# Test GHA to test EC2 GH Runner connectivity
+name: hello-world
+on: push
+jobs:
+  my-job:
+    runs-on: self-hosted
+    steps:
+      - name: my-step
+        run: echo "Hello World!"
