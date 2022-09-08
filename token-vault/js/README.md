@@ -1,6 +1,6 @@
 # mpl-token-vault
 
-This package contains the token vault contract SDK code
+This package contains the token vault contract SDK code.
 
 ## API Docs
 
