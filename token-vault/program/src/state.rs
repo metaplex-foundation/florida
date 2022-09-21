@@ -6,7 +6,7 @@ use solana_program::{account_info::AccountInfo, program_error::ProgramError, pub
 pub const PREFIX: &str = "vault";
 
 #[repr(C)]
-#[derive(Clone, BorshSerialize, BorshDeserialize, PartialEq)]
+#[derive(Clone, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
 pub enum Key {
     Uninitialized,
     SafetyDepositBoxV1,
@@ -18,7 +18,7 @@ pub const MAX_SAFETY_DEPOSIT_SIZE: usize = 1 + 32 + 32 + 32 + 1;
 pub const MAX_VAULT_SIZE: usize = 1 + 32 + 32 + 32 + 32 + 1 + 32 + 1 + 32 + 1 + 1 + 8;
 pub const MAX_EXTERNAL_ACCOUNT_SIZE: usize = 1 + 8 + 32 + 1;
 #[repr(C)]
-#[derive(Clone, BorshSerialize, BorshDeserialize, PartialEq)]
+#[derive(Clone, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
 pub enum VaultState {
     Inactive,
     Active,
