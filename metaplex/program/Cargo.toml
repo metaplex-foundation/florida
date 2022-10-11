@@ -1,6 +1,6 @@
 [package]
 name = "mpl-metaplex"
-version = "0.0.3"
+version = "0.1.0"
 description = "Metaplex"
 authors = ["Metaplex Maintainers <maintainers@metaplex.com>"]
 repository = "https://github.com/metaplex-foundation/florida"
