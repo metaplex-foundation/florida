@@ -14,7 +14,7 @@ use crate::{
 };
 use borsh::BorshSerialize;
 use mpl_token_metadata::{
-    state::{MasterEditionV1, MasterEditionV2, Metadata},
+    state::{MasterEditionV1, MasterEditionV2, Metadata, TokenMetadataAccount},
     utils::assert_update_authority_is_correct,
 };
 use mpl_token_vault::state::{SafetyDepositBox, Vault};

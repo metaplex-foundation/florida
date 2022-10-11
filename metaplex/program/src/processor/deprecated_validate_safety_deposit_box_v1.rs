@@ -11,7 +11,7 @@ use crate::{
     utils::{assert_derivation, assert_initialized, create_or_allocate_account_raw},
 };
 use borsh::BorshSerialize;
-use mpl_token_metadata::state::Metadata;
+use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
 use mpl_token_vault::state::{SafetyDepositBox, Vault};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
