@@ -1,3 +1,4 @@
+use crate::utils::token_metadata_account_from_account_info;
 use solana_program::msg;
 
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
 };
 use borsh::BorshSerialize;
 use mpl_auction::processor::AuctionData;
-use mpl_token_metadata::state::{MasterEditionV1, Metadata, TokenMetadataAccount};
+use mpl_token_metadata::state::{MasterEditionV1, Metadata};
 use mpl_token_vault::state::SafetyDepositBox;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -245,7 +246,7 @@ pub fn process_empty_payment_account(
     let auction_manager = get_auction_manager(auction_manager_info)?;
     let store = Store::from_account_info(store_info)?;
     let safety_deposit = SafetyDepositBox::from_account_info(safety_deposit_info)?;
-    let metadata = Metadata::from_account_info(metadata_info)?;
+    let metadata = token_metadata_account_from_account_info::<Metadata>(metadata_info)?;
     let auction = AuctionData::from_account_info(auction_info)?;
     let destination: Account = assert_initialized(destination_info)?;
     let accept_payment: Account = assert_initialized(accept_payment_info)?;
@@ -330,7 +331,7 @@ pub fn process_empty_payment_account(
         {
             // Could be a limited edition, in which case printing tokens or auth tokens were offered, not the original.
             let master_edition: MasterEditionV1 =
-                MasterEditionV1::from_account_info(master_edition_info)?;
+                token_metadata_account_from_account_info::<MasterEditionV1>(master_edition_info)?;
             if master_edition.printing_mint != safety_deposit.token_mint
                 && master_edition.one_time_printing_authorization_mint != safety_deposit.token_mint
             {

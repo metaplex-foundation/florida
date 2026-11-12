@@ -1,3 +1,4 @@
+use crate::utils::token_metadata_account_from_account_info;
 use crate::{
     error::MetaplexError,
     state::{
@@ -14,7 +15,7 @@ use crate::{
 };
 use borsh::BorshSerialize;
 use mpl_token_metadata::{
-    state::{MasterEditionV1, MasterEditionV2, Metadata, TokenMetadataAccount},
+    state::{MasterEditionV1, MasterEditionV2, Metadata},
     utils::assert_update_authority_is_correct,
 };
 use mpl_token_vault::state::{SafetyDepositBox, Vault};
@@ -321,7 +322,8 @@ pub fn assert_supply_logic_check(args: SupplyLogicCheckArgs) -> ProgramResult {
             if edition_key != *edition_info.key {
                 return Err(MetaplexError::InvalidEditionAddress.into());
             }
-            let master_edition = MasterEditionV1::from_account_info(edition_info)?;
+            let master_edition =
+                token_metadata_account_from_account_info::<MasterEditionV1>(edition_info)?;
             if safety_deposit.token_mint != master_edition.printing_mint {
                 return Err(MetaplexError::SafetyDepositBoxMasterMintMismatch.into());
             }
@@ -334,7 +336,8 @@ pub fn assert_supply_logic_check(args: SupplyLogicCheckArgs) -> ProgramResult {
             if edition_key != *edition_info.key {
                 return Err(MetaplexError::InvalidEditionAddress.into());
             }
-            let master_edition = MasterEditionV2::from_account_info(edition_info)?;
+            let master_edition =
+                token_metadata_account_from_account_info::<MasterEditionV2>(edition_info)?;
             if safety_deposit.token_mint != metadata.mint {
                 return Err(MetaplexError::SafetyDepositBoxMetadataMismatch.into());
             }
@@ -360,7 +363,8 @@ pub fn assert_supply_logic_check(args: SupplyLogicCheckArgs) -> ProgramResult {
             if edition_key != *edition_info.key {
                 return Err(MetaplexError::InvalidEditionAddress.into());
             }
-            let master_edition = MasterEditionV2::from_account_info(edition_info)?;
+            let master_edition =
+                token_metadata_account_from_account_info::<MasterEditionV2>(edition_info)?;
             if safety_deposit.token_mint != metadata.mint {
                 return Err(MetaplexError::SafetyDepositBoxMetadataMismatch.into());
             }
@@ -424,7 +428,7 @@ pub fn process_validate_safety_deposit_box_v2<'a>(
     let mut auction_token_tracker: AuctionWinnerTokenTypeTracker =
         AuctionWinnerTokenTypeTracker::from_account_info(auction_token_tracker_info)?;
     let safety_deposit = SafetyDepositBox::from_account_info(safety_deposit_info)?;
-    let metadata = Metadata::from_account_info(metadata_info)?;
+    let metadata = token_metadata_account_from_account_info::<Metadata>(metadata_info)?;
     let store = Store::from_account_info(auction_manager_store_info)?;
     // Is it a real vault?
     let vault = Vault::from_account_info(vault_info)?;
