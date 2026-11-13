@@ -1807,6 +1807,7 @@ dependencies = [
  "mpl-token-vault 0.2.0",
  "num-derive",
  "num-traits",
+ "solana-client",
  "solana-program",
  "solana-program-test",
  "solana-sdk",

@@ -14,10 +14,12 @@ use mpl_auction::{
     },
 };
 use mpl_token_metadata::{
+    error::MetadataError,
     instruction::update_metadata_accounts,
-    state::{Metadata, EDITION},
+    state::{Key as TmKey, Metadata, TokenMetadataAccount, EDITION},
 };
 use mpl_token_vault::{instruction::create_withdraw_tokens_instruction, state::Vault};
+use num_traits::FromPrimitive;
 use solana_program::{
     account_info::AccountInfo,
     borsh::try_from_slice_unchecked,
@@ -963,5 +965,141 @@ pub fn assert_keys_equal(key1: Pubkey, key2: Pubkey) -> ProgramResult {
         Err(MetaplexError::PublicKeyMismatch.into())
     } else {
         Ok(())
+    }
+}
+
+/// Load a Token Metadata account (Metadata, MasterEditionV1/V2) without requiring the
+/// account to be exactly `T::size()` bytes.
+///
+/// `TokenMetadataAccount::from_account_info` in mpl-token-metadata 1.4 rejects any account
+/// whose length isn't exactly the legacy maximum (e.g. `MAX_METADATA_LEN`). Token Metadata's
+/// `Resize` instruction shrinks accounts to their real serialized size, so resized NFTs
+/// would fail that check. The layout is unchanged by resizing, so we keep the key-byte and
+/// owner checks (and their error codes) and only drop the exact-length requirement. Borsh
+/// reads the prefix it needs and ignores any trailing bytes, and the custom `Metadata`
+/// deserializer already falls back to `None` for optional trailing fields that are absent.
+pub fn token_metadata_account_from_account_info<T: TokenMetadataAccount>(
+    a: &AccountInfo,
+) -> Result<T, ProgramError> {
+    let account: T = {
+        let data = a.try_borrow_data()?;
+        let key_ok = match data.first().and_then(|k| TmKey::from_u8(*k)) {
+            Some(key) => key == T::key() || key == TmKey::Uninitialized,
+            None => false,
+        };
+        if !key_ok {
+            return Err(MetadataError::DataTypeMismatch.into());
+        }
+        T::deserialize(&mut &data[..]).map_err(|_| MetadataError::DataTypeMismatch)?
+    };
+
+    if a.owner != &mpl_token_metadata::id() {
+        return Err(MetadataError::IncorrectOwner.into());
+    }
+
+    Ok(account)
+}
+
+#[cfg(test)]
+mod token_metadata_account_tests {
+    use super::*;
+    use borsh::BorshSerialize;
+    use mpl_token_metadata::state::{
+        Data, MasterEditionV2, MAX_MASTER_EDITION_LEN, MAX_METADATA_LEN,
+    };
+
+    fn sample_metadata() -> Metadata {
+        Metadata {
+            key: TmKey::MetadataV1,
+            update_authority: Pubkey::new_unique(),
+            mint: Pubkey::new_unique(),
+            data: Data {
+                name: "Resized".to_string(),
+                symbol: "RSZ".to_string(),
+                uri: "https://example.com/r.json".to_string(),
+                seller_fee_basis_points: 500,
+                creators: None,
+            },
+            primary_sale_happened: false,
+            is_mutable: true,
+            edition_nonce: Some(255),
+            token_standard: None,
+            collection: None,
+            uses: None,
+            collection_details: None,
+        }
+    }
+
+    fn load<T: TokenMetadataAccount>(mut data: Vec<u8>, owner: Pubkey) -> Result<T, ProgramError> {
+        let key = Pubkey::new_unique();
+        let mut lamports = 0u64;
+        let info = AccountInfo::new(
+            &key,
+            false,
+            false,
+            &mut lamports,
+            &mut data,
+            &owner,
+            false,
+            0,
+        );
+        token_metadata_account_from_account_info::<T>(&info)
+    }
+
+    #[test]
+    fn metadata_resized_and_padded() {
+        let md = sample_metadata();
+        let resized = md.try_to_vec().unwrap();
+        assert!(resized.len() < MAX_METADATA_LEN);
+
+        let mut padded = resized.clone();
+        padded.resize(MAX_METADATA_LEN, 0);
+
+        assert_eq!(
+            load::<Metadata>(resized, mpl_token_metadata::id()).unwrap(),
+            md
+        );
+        assert_eq!(
+            load::<Metadata>(padded, mpl_token_metadata::id()).unwrap(),
+            md
+        );
+    }
+
+    #[test]
+    fn master_edition_v2_resized_and_padded() {
+        let me = MasterEditionV2 {
+            key: TmKey::MasterEditionV2,
+            supply: 3,
+            max_supply: Some(10),
+        };
+        let resized = me.try_to_vec().unwrap();
+        let mut padded = resized.clone();
+        padded.resize(MAX_MASTER_EDITION_LEN, 0);
+
+        assert_eq!(
+            load::<MasterEditionV2>(resized, mpl_token_metadata::id()).unwrap(),
+            me
+        );
+        assert_eq!(
+            load::<MasterEditionV2>(padded, mpl_token_metadata::id()).unwrap(),
+            me
+        );
+    }
+
+    #[test]
+    fn rejects_wrong_key_wrong_owner_and_empty() {
+        let md_bytes = sample_metadata().try_to_vec().unwrap();
+        assert_eq!(
+            load::<MasterEditionV2>(md_bytes.clone(), mpl_token_metadata::id()).unwrap_err(),
+            MetadataError::DataTypeMismatch.into()
+        );
+        assert_eq!(
+            load::<Metadata>(md_bytes, Pubkey::new_unique()).unwrap_err(),
+            MetadataError::IncorrectOwner.into()
+        );
+        assert_eq!(
+            load::<Metadata>(vec![], mpl_token_metadata::id()).unwrap_err(),
+            MetadataError::DataTypeMismatch.into()
+        );
     }
 }

@@ -1,3 +1,4 @@
+use crate::utils::token_metadata_account_from_account_info;
 use crate::{
     deprecated_state::{AuctionManagerV1, ParticipationStateV1},
     error::MetaplexError,
@@ -9,7 +10,7 @@ use crate::{
     },
 };
 use borsh::BorshSerialize;
-use mpl_token_metadata::state::{MasterEditionV1, Metadata, TokenMetadataAccount};
+use mpl_token_metadata::state::{MasterEditionV1, Metadata};
 use mpl_token_vault::state::{SafetyDepositBox, Vault};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -48,8 +49,10 @@ pub fn process_deprecated_validate_participation(
     let safety_deposit = SafetyDepositBox::from_account_info(safety_deposit_box_info)?;
     let printing_token_account: Account =
         assert_initialized(printing_authorization_token_account_info)?;
-    let open_edition_metadata = Metadata::from_account_info(open_edition_metadata_info)?;
-    let master_edition = MasterEditionV1::from_account_info(open_master_edition_info)?;
+    let open_edition_metadata =
+        token_metadata_account_from_account_info::<Metadata>(open_edition_metadata_info)?;
+    let master_edition =
+        token_metadata_account_from_account_info::<MasterEditionV1>(open_master_edition_info)?;
 
     if vault.authority != *auction_manager_info.key {
         return Err(MetaplexError::VaultAuthorityMismatch.into());

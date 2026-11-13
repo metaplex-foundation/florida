@@ -1,3 +1,4 @@
+use crate::utils::token_metadata_account_from_account_info;
 use crate::{
     error::MetaplexError,
     state::{CommonWinningIndexChecks, CommonWinningIndexReturn, WinningConfigType, PREFIX},
@@ -7,7 +8,7 @@ use crate::{
         CommonRedeemReturn,
     },
 };
-use mpl_token_metadata::state::{Metadata, TokenMetadataAccount};
+use mpl_token_metadata::state::Metadata;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
@@ -113,7 +114,7 @@ pub fn process_full_rights_transfer_bid<'a>(
                 &[auction_bump_seed],
             ];
 
-            let metadata = Metadata::from_account_info(metadata_info)?;
+            let metadata = token_metadata_account_from_account_info::<Metadata>(metadata_info)?;
             if metadata.update_authority == *auction_manager_info.key {
                 // If this is a call for a broken auction manager that was forced to disbursing
                 // by a distressed auctioneer, the metadata transfer may not have happened, so

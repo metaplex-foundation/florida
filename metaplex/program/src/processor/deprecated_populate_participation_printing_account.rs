@@ -1,3 +1,4 @@
+use crate::utils::token_metadata_account_from_account_info;
 use crate::{
     deprecated_state::{AuctionManagerV1, ParticipationConfigV1},
     error::MetaplexError,
@@ -9,8 +10,7 @@ use crate::{
 };
 use mpl_auction::processor::{AuctionData, AuctionDataExtended, AuctionState};
 use mpl_token_metadata::{
-    deprecated_instruction::deprecated_mint_printing_tokens_via_token,
-    state::{MasterEditionV1, TokenMetadataAccount},
+    deprecated_instruction::deprecated_mint_printing_tokens_via_token, state::MasterEditionV1,
 };
 use mpl_token_vault::state::SafetyDepositBox;
 use solana_program::{
@@ -98,7 +98,8 @@ pub fn process_deprecated_populate_participation_printing_account<'a>(
     let safety_deposit_token_store: Account = assert_initialized(&safety_deposit_token_store_info)?;
     let auction = AuctionData::from_account_info(auction_info)?;
     let auction_extended = AuctionDataExtended::from_account_info(auction_extended_info)?;
-    let master_edition = MasterEditionV1::from_account_info(master_edition_info)?;
+    let master_edition =
+        token_metadata_account_from_account_info::<MasterEditionV1>(master_edition_info)?;
     let transient_one_time_auth_holding_account: Account =
         assert_initialized(transient_one_time_holding_info)?;
     let participation_printing_account: Account =
