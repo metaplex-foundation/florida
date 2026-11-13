@@ -7,7 +7,7 @@ shrunk by its `Resize` instruction.
 | Test | What it checks |
 | --- | --- |
 | `token_only_transfer_auction_with_resized_nft` | A resized NFT goes through the whole auction: validate, start, bid, end, redeem to the winner, claim the bid, pay the creator. |
-| `token_only_transfer_auction_with_full_size_nft` | The same flow with a full-size NFT. This is a control: if it fails too, the problem is the setup, not resizing. |
+| `token_only_transfer_auction_with_unresized_nft` | The same flow with an NFT that was never resized. Today's Token Metadata already creates NFTs smaller than the sizes the unpatched program accepts, so this also needs the fix. It doubles as a control: if it fails too, the problem is the setup, not resizing. |
 | `printing_v2_validation_with_resized_master_edition` | Validating a printing auction accepts a resized master edition. |
 
 The tests are `#[ignore]`d, so a normal `cargo test` skips them.
@@ -45,7 +45,7 @@ If a test fails, the panic message includes the transaction's program logs.
 
 ## Not covered, because current Token Metadata breaks them for every NFT
 
-These are separate from resizing and fail with full-size NFTs too:
+These are separate from resizing and fail with unresized NFTs too:
 
 - **FullRightsTransfer** auctions fail at validation. The program moves the update
   authority with `UpdateMetadataAccount` (v1), which Token Metadata has removed.
