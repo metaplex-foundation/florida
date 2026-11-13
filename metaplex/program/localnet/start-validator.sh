@@ -31,13 +31,26 @@ if [ ! -f "$SO" ]; then
   exit 1
 fi
 
-echo "Using $("$VALIDATOR" --version)"
+VERSION_LINE=$("$VALIDATOR" --version)
+echo "Using $VERSION_LINE"
+MAJOR=$(echo "$VERSION_LINE" | grep -o '[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*' | head -1 | cut -d. -f1)
+if [ "${MAJOR:-0}" -lt 2 ]; then
+  cat >&2 <<EOF
+error: this validator is too old ($VERSION_LINE).
+The current Token Metadata program needs a current Agave validator (2.x or newer).
+Keep 1.14 for 'cargo build-bpf', install a current Agave release in a separate
+directory, and point SOLANA_BIN at its bin/ directory, e.g.:
+  SOLANA_BIN=\$HOME/agave/solana-release/bin ./localnet/start-validator.sh
+EOF
+  exit 1
+fi
 
 # Upgradeable programs and old loader-v2 programs need different clone flags.
 clone_flag() {
   local owner
   owner=$("$SOLANA" account -u "$CLUSTER" "$1" --output json \
     | grep -o '"owner": *"[^"]*"' | head -1 | cut -d'"' -f4)
+  [ -n "$owner" ] || return 1
   if [ "$owner" = "BPFLoaderUpgradeab1e11111111111111111111111" ]; then
     echo --clone-upgradeable-program
   else
@@ -52,7 +65,11 @@ args=(
   --bpf-program "$METAPLEX" "$SO"
 )
 for id in "$TOKEN_METADATA" "$AUCTION" "$VAULT"; do
-  args+=("$(clone_flag "$id")" "$id")
+  if ! flag=$(clone_flag "$id"); then
+    echo "error: couldn't look up $id on $CLUSTER (needs internet access)" >&2
+    exit 1
+  fi
+  args+=("$flag" "$id")
 done
 
 # Run with mainnet's feature set (where this old program runs today) instead of
