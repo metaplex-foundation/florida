@@ -1,9 +1,15 @@
 //! End-to-end tests against a running local validator.
 //!
 //! They drive real auctions through this program using NFTs created by the
-//! current mainnet Token Metadata program, including NFTs shrunk by its
-//! `Resize` instruction. They are `#[ignore]`d so a plain `cargo test` skips
-//! them; see `localnet/README.md` for how to start the validator and run them:
+//! current mainnet Token Metadata program. Those NFTs have the same account
+//! sizes and layout as legacy NFTs after Token Metadata's `Resize` (metadata
+//! 607 bytes, master edition 20 bytes), which mpl-token-metadata 1.4 rejected
+//! because it required exactly 679 and 282 bytes. (`Resize` itself can't be
+//! run on them: it only converts legacy-size accounts and refuses anything
+//! already at the current size.)
+//!
+//! The tests are `#[ignore]`d so a plain `cargo test` skips them; see
+//! `localnet/README.md` for how to start the validator and run them:
 //!
 //!   cargo test --test localnet -- --ignored --test-threads=1 --nocapture
 //!
@@ -55,11 +61,6 @@ use spl_associated_token_account::{
     get_associated_token_address, instruction::create_associated_token_account,
 };
 use std::{thread::sleep, time::Duration};
-
-/// Token Metadata's `Resize` instruction (discriminator 56). It is newer than the
-/// mpl-token-metadata crate this program pins, so it is built by hand. Account order
-/// and the discriminator come from the mpl-token-metadata program/client source.
-const RESIZE_DISCRIMINATOR: u8 = 56;
 
 const BID_AMOUNT: u64 = 1_000;
 
@@ -301,52 +302,19 @@ fn mint_nft(ctx: &Ctx, owner: &Keypair, max_supply: Option<u64>) -> Nft {
         ),
     ];
     ctx.send("create metadata + master edition", &ixs, &[owner]);
+    let (md, ed) = (ctx.data_len(&nft.metadata), ctx.data_len(&nft.edition));
     println!(
         "  minted: metadata {} bytes, master edition {} bytes \
          (mpl-token-metadata 1.4 requires exactly {} and {})",
-        ctx.data_len(&nft.metadata),
-        ctx.data_len(&nft.edition),
-        MAX_METADATA_LEN,
-        MAX_MASTER_EDITION_LEN
+        md, ed, MAX_METADATA_LEN, MAX_MASTER_EDITION_LEN
+    );
+    // These tests are only meaningful if the accounts are smaller than the
+    // legacy sizes, i.e. the same as a resized NFT.
+    assert!(
+        md < MAX_METADATA_LEN && ed < MAX_MASTER_EDITION_LEN,
+        "Token Metadata created legacy-size accounts; these tests expect resized-size ones"
     );
     nft
-}
-
-/// Shrink the NFT's metadata and master edition with Token Metadata's `Resize`,
-/// signed by the holder, and check the metadata really got smaller.
-///
-/// Note: today's Token Metadata already creates accounts smaller than the old
-/// fixed sizes that mpl-token-metadata 1.4 expects (metadata 607 vs 679 bytes,
-/// master edition 20 vs 282), and `Resize` then shrinks them to their exact
-/// serialized size.
-fn resize_nft(ctx: &Ctx, nft: &Nft, holder: &Keypair) {
-    let tm = mpl_token_metadata::id();
-    let (md_before, ed_before) = (ctx.data_len(&nft.metadata), ctx.data_len(&nft.edition));
-
-    let ix = Instruction {
-        program_id: tm,
-        accounts: vec![
-            AccountMeta::new(nft.metadata, false),
-            AccountMeta::new(nft.edition, false),
-            AccountMeta::new_readonly(nft.mint, false),
-            // payer: also the authority (the holder) because `authority` is omitted.
-            AccountMeta::new(holder.pubkey(), true),
-            // authority: omitted (optional accounts are passed as the program id).
-            AccountMeta::new_readonly(tm, false),
-            AccountMeta::new_readonly(nft.token, false),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
-        data: vec![RESIZE_DISCRIMINATOR],
-    };
-    ctx.send("Token Metadata Resize", &[ix], &[holder]);
-
-    let (md, ed) = (ctx.data_len(&nft.metadata), ctx.data_len(&nft.edition));
-    println!(
-        "  resized: metadata {} -> {} bytes, master edition {} -> {} bytes",
-        md_before, md, ed_before, ed
-    );
-    assert!(md < md_before, "metadata was not resized");
-    assert!(ed <= ed_before, "master edition grew");
 }
 
 // ---------------------------------------------------------------------------
@@ -371,12 +339,11 @@ struct Auction {
     safety_deposit_config: Pubkey,
 }
 
-/// Mint an NFT (optionally resized), lock it in a combined vault, create an
-/// auction for it and an AuctionManagerV2, then run ValidateSafetyDepositBoxV2,
-/// which is where a resized NFT used to be rejected.
+/// Mint a current-format (resized-size) NFT, lock it in a combined vault,
+/// create an auction for it and an AuctionManagerV2, then run
+/// ValidateSafetyDepositBoxV2, which is where such NFTs used to be rejected.
 fn setup_validated_auction(
     ctx: &Ctx,
-    resize: bool,
     max_supply: Option<u64>,
     winning_config_type: WinningConfigType,
 ) -> Auction {
@@ -388,9 +355,6 @@ fn setup_validated_auction(
     let s = seller.pubkey();
 
     let nft = mint_nft(ctx, &seller, max_supply);
-    if resize {
-        resize_nft(ctx, &nft, &seller);
-    }
 
     // Bidding currency: a fresh SPL mint, so the test never touches wrapped SOL.
     let currency = Keypair::new();
@@ -941,35 +905,24 @@ fn run_token_only_transfer_auction(ctx: &Ctx, a: &Auction) {
 // Tests
 // ---------------------------------------------------------------------------
 
-/// The fix: a resized NFT goes through a whole TokenOnlyTransfer auction
-/// (validate, start, bid, end, redeem, claim, creator payout).
+/// The fix: an NFT with resized-size accounts goes through a whole
+/// TokenOnlyTransfer auction (validate, start, bid, end, redeem, claim,
+/// creator payout). Every step that reads the Metadata account is covered.
 #[test]
 #[ignore = "needs a local validator: see localnet/README.md"]
-fn token_only_transfer_auction_with_resized_nft() {
+fn token_only_transfer_auction_with_resized_size_nft() {
     let ctx = Ctx::new();
-    let a = setup_validated_auction(&ctx, true, Some(0), WinningConfigType::TokenOnlyTransfer);
-    run_token_only_transfer_auction(&ctx, &a);
-}
-
-/// The same flow with an NFT that was never resized. Today's Token Metadata
-/// already creates these below the old fixed sizes (see `mint_nft`), so the
-/// unpatched program rejects them too. Also a control for the harness: if this
-/// fails, the problem is the setup, not resizing.
-#[test]
-#[ignore = "needs a local validator: see localnet/README.md"]
-fn token_only_transfer_auction_with_unresized_nft() {
-    let ctx = Ctx::new();
-    let a = setup_validated_auction(&ctx, false, Some(0), WinningConfigType::TokenOnlyTransfer);
+    let a = setup_validated_auction(&ctx, Some(0), WinningConfigType::TokenOnlyTransfer);
     run_token_only_transfer_auction(&ctx, &a);
 }
 
 /// Validation of a printing auction deserializes the MasterEditionV2 as well,
-/// so check a resized master edition is accepted there. (Redeeming printing
-/// prizes is not tested: the current Token Metadata program has removed the
-/// vault-proxy print instruction that RedeemPrintingV2Bid relies on.)
+/// so check a resized-size (20-byte) master edition is accepted there.
+/// (Redeeming printing prizes is not tested: the current Token Metadata program
+/// has removed the vault-proxy print instruction that RedeemPrintingV2Bid uses.)
 #[test]
 #[ignore = "needs a local validator: see localnet/README.md"]
-fn printing_v2_validation_with_resized_master_edition() {
+fn printing_v2_validation_with_resized_size_master_edition() {
     let ctx = Ctx::new();
-    setup_validated_auction(&ctx, true, Some(10), WinningConfigType::PrintingV2);
+    setup_validated_auction(&ctx, Some(10), WinningConfigType::PrintingV2);
 }

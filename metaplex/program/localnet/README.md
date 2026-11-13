@@ -1,14 +1,20 @@
 # Local-validator tests
 
 `tests/localnet.rs` runs real auctions through this program on a local validator,
-using NFTs made by the **current mainnet** Token Metadata program, including NFTs
-shrunk by its `Resize` instruction.
+using NFTs made by the **current mainnet** Token Metadata program.
+
+Token Metadata's `Resize` converts legacy accounts (679-byte metadata, 282-byte
+master edition) to the current sizes (607 and 20 bytes). NFTs minted today are
+created at those sizes, so they look the same as resized NFTs, and the unpatched
+program rejects both because mpl-token-metadata 1.4 requires exactly 679 and 282
+bytes. `Resize` itself can't be run on a fresh mint: Token Metadata answers
+"Account has already been resized". So the tests use freshly minted NFTs, and
+check that their accounts are below the legacy sizes.
 
 | Test | What it checks |
 | --- | --- |
-| `token_only_transfer_auction_with_resized_nft` | A resized NFT goes through the whole auction: validate, start, bid, end, redeem to the winner, claim the bid, pay the creator. |
-| `token_only_transfer_auction_with_unresized_nft` | The same flow with an NFT that was never resized. Today's Token Metadata already creates NFTs smaller than the sizes the unpatched program accepts, so this also needs the fix. It doubles as a control: if it fails too, the problem is the setup, not resizing. |
-| `printing_v2_validation_with_resized_master_edition` | Validating a printing auction accepts a resized master edition. |
+| `token_only_transfer_auction_with_resized_size_nft` | An NFT with resized-size accounts goes through the whole auction: validate, start, bid, end, redeem to the winner, claim the bid, pay the creator. |
+| `printing_v2_validation_with_resized_size_master_edition` | Validating a printing auction accepts a 20-byte master edition. |
 
 The tests are `#[ignore]`d, so a normal `cargo test` skips them.
 
@@ -45,7 +51,7 @@ If a test fails, the panic message includes the transaction's program logs.
 
 ## Not covered, because current Token Metadata breaks them for every NFT
 
-These are separate from resizing and fail with unresized NFTs too:
+These are separate from resizing and fail with every NFT:
 
 - **FullRightsTransfer** auctions fail at validation. The program moves the update
   authority with `UpdateMetadataAccount` (v1), which Token Metadata has removed.
