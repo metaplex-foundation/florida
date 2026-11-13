@@ -27,6 +27,7 @@ spl-associated-token-account = "1.0.5"
 [dev-dependencies]
 solana-sdk = "1.10"
 solana-program-test = "1.10"
+solana-client = "1.10"
 
 [lib]
 crate-type = ["cdylib", "lib"]
