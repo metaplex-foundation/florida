@@ -77,6 +77,20 @@ impl Ctx {
         let url = std::env::var("RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:8899".into());
         let client = RpcClient::new_with_commitment(url.clone(), CommitmentConfig::confirmed());
 
+        match client.get_version() {
+            Ok(v) => println!("validator at {}: solana-core {}", url, v.solana_core),
+            Err(e) => panic!(
+                "Can't reach a validator at {}: {}. Is localnet/start-validator.sh still \
+                 running? (Set RPC_URL if it listens elsewhere.)",
+                url, e
+            ),
+        }
+
+        let loaders = [
+            solana_sdk::bpf_loader::id(),
+            solana_sdk::bpf_loader_deprecated::id(),
+            solana_sdk::bpf_loader_upgradeable::id(),
+        ];
         for (name, id) in [
             ("Metaplex (this program)", mpl_metaplex::id()),
             ("Token Metadata", mpl_token_metadata::id()),
@@ -84,11 +98,18 @@ impl Ctx {
             ("Token Vault", mpl_token_vault::id()),
         ] {
             match client.get_account(&id) {
-                Ok(acct) if acct.executable => {}
-                _ => panic!(
-                    "{} program {} is not deployed on {}. Start the validator with \
-                     localnet/start-validator.sh first.",
-                    name, id, url
+                // Newer validators may not set `executable`, so also accept any
+                // account owned by a BPF loader.
+                Ok(acct) if acct.executable || loaders.contains(&acct.owner) => {}
+                Ok(acct) => panic!(
+                    "{} program {} exists on {} but doesn't look like a program \
+                     (owner {}, executable {}).",
+                    name, id, url, acct.owner, acct.executable
+                ),
+                Err(e) => panic!(
+                    "{} program {} was not found on {}: {}. Check the validator's output: \
+                     the program didn't load at startup.",
+                    name, id, url, e
                 ),
             }
         }
